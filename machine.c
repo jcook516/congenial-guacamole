@@ -152,6 +152,9 @@ uint64_t get_value(struct operand_t operand) {
     switch (operand.type) {
         case OPERAND_constant:
             return operand.constant;
+        
+        case OPERAND_address:
+            return operand.constant;
 
         case OPERAND_register:
             switch (operand.reg_type) {
@@ -168,12 +171,6 @@ uint64_t get_value(struct operand_t operand) {
                 case REGISTER_sp:
                     return machine.sp;
             }
-            break;
-
-        case OPERAND_memory:
-            // Implement memory operand handling, if needed
-            // This will depend on how memory operands are represented in the machine struct
-            break;
     }
     return 0;
 }
@@ -183,7 +180,23 @@ uint64_t get_value(struct operand_t operand) {
  */
 void put_value(struct operand_t operand, uint64_t value) {
     assert(operand.type == OPERAND_register);
-    // TODO 
+    switch (operand.reg_type) {
+        case REGISTER_w:
+            machine.registers[operand.reg_num] = value & 0xFFFFFFFF;
+            break;
+
+        case REGISTER_x:
+            machine.registers[operand.reg_num] = value;
+            break;
+
+        case REGISTER_pc:
+            machine.pc = value;
+            break;
+
+        case REGISTER_sp:
+            machine.sp = value;
+            break;
+    }
 }
 
 /*
@@ -191,20 +204,110 @@ void put_value(struct operand_t operand, uint64_t value) {
  */
 uint64_t get_memory_address(struct operand_t operand) {
     assert(operand.type == OPERAND_memory);
-    // TODO
-    return 0;
+
+    uint64_t val = 0;
+    operand.type = OPERAND_register;
+    val = get_value(operand) + operand.constant;
+    operand.type = OPERAND_memory;
+
+    return val;
+}
+
+
+void execute_ldr_str(struct operand_t first, struct operand_t second, unsigned int operation){
+    
+    if (first.reg_type == REGISTER_w){
+        uint32_t* addy = machine.stack + (machine.stack_top - get_memory_address(second));
+    
+        switch(operation){
+            case OPERATION_ldr:
+                put_value(first,*addy);
+                break;
+
+            case OPERATION_str:
+                *addy = get_value(first);
+                break;
+        }
+    }
+
+    else{        
+        uint64_t* addy = machine.stack + (machine.stack_top - get_memory_address(second));
+
+        switch(operation){
+            case OPERATION_ldr:
+                put_value(first,*addy);
+                break;
+
+            case OPERATION_str:
+                *addy = get_value(first);
+                break;
+        }
+    }
+
 }
 
 /*
  * Execute an instruction
  */
+
 void execute(struct instruction_t instruction) {
+    struct operand_t first = instruction.operands[0];
+    struct operand_t second = instruction.operands[1];
+    struct operand_t third = instruction.operands[2];
+    
     switch(instruction.operation) {
     // TODO
-    case OPERATION_nop:
-        // Nothing to do
-        break;
-    default:
-        printf("!!Instruction not implemented!!\n");
+        case OPERATION_nop:
+            // Nothing to do
+            break;
+
+        case OPERATION_add:
+            put_value(first,get_value(second) + get_value(third));
+            break;
+
+        case OPERATION_sub:
+            put_value(first,get_value(second) - get_value(third));
+            break;
+
+        case OPERATION_lsl:
+            put_value(first,get_value(second) << get_value(third));
+            break;
+        
+        case OPERATION_lsr:
+            put_value(first,get_value(second) >> get_value(third));
+            break;
+        
+        case OPERATION_and:
+            put_value(first,get_value(second) & get_value(third));
+            break;
+        
+        case OPERATION_orr:
+            put_value(first,get_value(second) | get_value(third));
+            break;
+
+        case OPERATION_ldr:
+            execute_ldr_str(first,second,instruction.operation);
+            break;
+        
+        case OPERATION_str:
+            execute_ldr_str(first,second,instruction.operation);
+            break;
+        
+        case OPERATION_mov:
+            put_value(first,get_value(second));
+            break;
+
+        case OPERATION_b:
+            machine.pc = get_value(first);
+            break;
+
+        case OPERATION_bl:
+            machine.pc = get_value(first);
+
+            break;
+
+
+        default:
+            printf("!!Instruction not implemented!!\n");
     }
 }
